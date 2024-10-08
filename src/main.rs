@@ -1,9 +1,9 @@
-pub mod ds4;
 pub mod mac;
+pub mod sixaxis;
 
 use clap::{Parser, Subcommand};
-use ds4::{get_mac, set_mac};
 use mac::MACAddress;
+use sixaxis::SixAxisController;
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -27,20 +27,60 @@ enum Command {
     },
 }
 
+fn handle_get() {
+    // connect to controller
+    let controller = SixAxisController::open(None);
+    if controller.is_err() {
+        eprintln!("Failed to open controller: {}", controller.err().unwrap());
+        std::process::exit(1);
+    }
+    let controller = controller.unwrap();
+
+    // get paired mac
+    let mac = controller.get_paired_mac();
+    if mac.is_err() {
+        eprintln!("Failed to get paired MAC: {}", mac.err().unwrap());
+        std::process::exit(1);
+    }
+    let mac = mac.unwrap();
+
+    println!("Paired MAC: {}", mac);
+    std::process::exit(0);
+}
+
+fn handle_pair(mac: String) {
+    // parse mac address
+    let mac = MACAddress::from_string(&mac);
+    if mac.is_err() {
+        eprintln!("Invalid MAC Address: {}", mac.err().unwrap());
+        std::process::exit(1);
+    }
+    let mac = mac.unwrap();
+
+    // connect to controller
+    let controller = SixAxisController::open(None);
+    if controller.is_err() {
+        eprintln!("Failed to open controller: {}", controller.err().unwrap());
+        std::process::exit(1);
+    }
+    let controller = controller.unwrap();
+
+    // pair controller
+    let result = controller.set_paired_mac(&mac);
+    if result.is_err() {
+        eprintln!("Failed to pair controller: {}", result.err().unwrap());
+        std::process::exit(1);
+    }
+
+    println!("Controller paired to MAC: {}", mac);
+    std::process::exit(0);
+}
+
 fn main() {
     let args = Args::parse();
 
     match args.command {
-        Command::Get {} => match get_mac() {
-            Ok(mac) => println!("Current MAC address: {}", mac),
-            Err(e) => eprintln!("Error: {}", e),
-        },
-        Command::Pair { mac } => match MACAddress::from_string(&mac) {
-            Ok(mac) => match set_mac(&mac) {
-                Ok(_) => println!("Successfully paired controller to MAC address: {}", mac),
-                Err(e) => eprintln!("Error: {}", e),
-            },
-            Err(e) => eprintln!("Error: {}", e),
-        },
+        Command::Get {} => handle_get(),
+        Command::Pair { mac } => handle_pair(mac),
     }
 }

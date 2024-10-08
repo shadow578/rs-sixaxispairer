@@ -50,4 +50,9 @@ impl MACAddress {
 
         Ok(MACAddress(bytes))
     }
+
+    /// Get the MAC address as a byte array.
+    pub fn as_bytes(&self) -> [u8; 6] {
+        self.0
+    }
 }
