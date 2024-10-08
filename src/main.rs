@@ -15,6 +15,10 @@ struct Args {
     #[command(subcommand)]
     command: Command,
 
+    /// Do not print device information.
+    #[arg(short, long, default_value = "false")]
+    no_device_info: bool,
+
     /// Manually specify the USB device ID of the controller.
     #[arg(short, long)]
     vendor_id: Option<u16>,
@@ -36,14 +40,27 @@ enum Command {
     },
 }
 
-fn handle_get(device_id: Option<USBDeviceId>) {
-    // connect to controller
+fn connect_controller(
+    device_id: Option<USBDeviceId>,
+    print_device_info: bool,
+) -> SixAxisController {
     let controller = SixAxisController::open(device_id);
     if controller.is_err() {
         eprintln!("Failed to open controller: {}", controller.err().unwrap());
         std::process::exit(1);
     }
     let controller = controller.unwrap();
+
+    if print_device_info {
+        let display_name = controller.get_display_name(Some(true));
+        println!("Connected to: {}", display_name);
+    }
+
+    return controller;
+}
+
+fn handle_get(device_id: Option<USBDeviceId>, no_device_info: bool) {
+    let controller = connect_controller(device_id, !no_device_info);
 
     // get paired mac
     let mac = controller.get_paired_mac();
@@ -57,8 +74,9 @@ fn handle_get(device_id: Option<USBDeviceId>) {
     std::process::exit(0);
 }
 
-fn handle_pair(device_id: Option<USBDeviceId>, mac: String) {
+fn handle_pair(device_id: Option<USBDeviceId>, no_device_info: bool, mac: String) {
     // parse mac address
+    // do this before connecting to controller to fail early
     let mac = MACAddress::from_string(&mac);
     if mac.is_err() {
         eprintln!("Invalid MAC Address: {}", mac.err().unwrap());
@@ -67,12 +85,7 @@ fn handle_pair(device_id: Option<USBDeviceId>, mac: String) {
     let mac = mac.unwrap();
 
     // connect to controller
-    let controller = SixAxisController::open(device_id);
-    if controller.is_err() {
-        eprintln!("Failed to open controller: {}", controller.err().unwrap());
-        std::process::exit(1);
-    }
-    let controller = controller.unwrap();
+    let controller = connect_controller(device_id, !no_device_info);
 
     // pair controller
     let result = controller.set_paired_mac(&mac);
@@ -106,7 +119,7 @@ fn main() {
 
     // handle subcommand
     match args.command {
-        Command::Get {} => handle_get(device_id),
-        Command::Pair { mac } => handle_pair(device_id, mac),
+        Command::Get {} => handle_get(device_id, args.no_device_info),
+        Command::Pair { mac } => handle_pair(device_id, args.no_device_info, mac),
     }
 }
