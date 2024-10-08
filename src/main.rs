@@ -3,7 +3,7 @@ pub mod sixaxis;
 
 use clap::{Parser, Subcommand};
 use mac::MACAddress;
-use sixaxis::SixAxisController;
+use sixaxis::{SixAxisController, USBDeviceId};
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -11,8 +11,17 @@ use sixaxis::SixAxisController;
     about = "A simple CLI tool to view and change the paired MAC address of a Sony Sixaxis controller."
 )]
 struct Args {
+    /// The subcommand to run.
     #[command(subcommand)]
     command: Command,
+
+    /// Manually specify the USB device ID of the controller.
+    #[arg(short, long)]
+    vendor_id: Option<u16>,
+
+    /// Manually specify the USB product ID of the controller.
+    #[arg(short, long)]
+    product_id: Option<u16>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -27,9 +36,9 @@ enum Command {
     },
 }
 
-fn handle_get() {
+fn handle_get(device_id: Option<USBDeviceId>) {
     // connect to controller
-    let controller = SixAxisController::open(None);
+    let controller = SixAxisController::open(device_id);
     if controller.is_err() {
         eprintln!("Failed to open controller: {}", controller.err().unwrap());
         std::process::exit(1);
@@ -48,7 +57,7 @@ fn handle_get() {
     std::process::exit(0);
 }
 
-fn handle_pair(mac: String) {
+fn handle_pair(device_id: Option<USBDeviceId>, mac: String) {
     // parse mac address
     let mac = MACAddress::from_string(&mac);
     if mac.is_err() {
@@ -58,7 +67,7 @@ fn handle_pair(mac: String) {
     let mac = mac.unwrap();
 
     // connect to controller
-    let controller = SixAxisController::open(None);
+    let controller = SixAxisController::open(device_id);
     if controller.is_err() {
         eprintln!("Failed to open controller: {}", controller.err().unwrap());
         std::process::exit(1);
@@ -79,8 +88,25 @@ fn handle_pair(mac: String) {
 fn main() {
     let args = Args::parse();
 
+    // unwrap manually specified device id
+    // if either vendor or product id is specified, both must be specified
+    if args.vendor_id.is_some() != args.product_id.is_some() {
+        eprintln!("Both vendor and product ID must be specified.");
+        std::process::exit(1);
+    }
+
+    let device_id = if args.vendor_id.is_some() {
+        Some(USBDeviceId {
+            vendor: args.vendor_id.unwrap(),
+            product: args.product_id.unwrap(),
+        })
+    } else {
+        None
+    };
+
+    // handle subcommand
     match args.command {
-        Command::Get {} => handle_get(),
-        Command::Pair { mac } => handle_pair(mac),
+        Command::Get {} => handle_get(device_id),
+        Command::Pair { mac } => handle_pair(device_id, mac),
     }
 }

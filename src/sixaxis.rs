@@ -3,6 +3,7 @@ use hidapi::{HidApi, HidDevice};
 use std::error::Error;
 
 /// A struct representing a USB device ID.
+#[derive(Debug, Clone, Copy)]
 pub struct USBDeviceId {
     /// USB Vendor ID.
     pub vendor: u16,
