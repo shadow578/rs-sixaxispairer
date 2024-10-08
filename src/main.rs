@@ -48,7 +48,7 @@ fn connect_controller(
     device_id: Option<USBDeviceId>,
     print_device_info: bool,
 ) -> SixAxisController {
-    let controller = SixAxisController::open(device_id);
+    let controller = SixAxisController::open(device_id, None); // TODO: allow specifying protocol in CLI
     if controller.is_err() {
         eprintln!("Failed to open controller: {}", controller.err().unwrap());
         std::process::exit(1);
