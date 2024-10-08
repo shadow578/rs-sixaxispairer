@@ -37,6 +37,10 @@ enum Command {
     Pair {
         /// The MAC address to pair the controller to.
         mac: String,
+
+        /// Skip verification of the paired MAC address.
+        #[arg(short, long, default_value = "false")]
+        no_verify: bool,
     },
 }
 
@@ -74,7 +78,7 @@ fn handle_get(device_id: Option<USBDeviceId>, no_device_info: bool) {
     std::process::exit(0);
 }
 
-fn handle_pair(device_id: Option<USBDeviceId>, no_device_info: bool, mac: String) {
+fn handle_pair(device_id: Option<USBDeviceId>, no_device_info: bool, verify: bool, mac: String) {
     // parse mac address
     // do this before connecting to controller to fail early
     let mac = MACAddress::from_string(&mac);
@@ -92,6 +96,24 @@ fn handle_pair(device_id: Option<USBDeviceId>, no_device_info: bool, mac: String
     if result.is_err() {
         eprintln!("Failed to pair controller: {}", result.err().unwrap());
         std::process::exit(1);
+    }
+
+    if verify {
+        // fetch paired mac again to verify
+        let paired_mac = controller.get_paired_mac();
+        if paired_mac.is_err() {
+            eprintln!("Failed to get paired MAC: {}", paired_mac.err().unwrap());
+            std::process::exit(1);
+        }
+        let paired_mac = paired_mac.unwrap();
+
+        if paired_mac != mac {
+            eprintln!(
+                "Failed to verify paired MAC: expected {}, got {}",
+                mac, paired_mac
+            );
+            std::process::exit(1);
+        }
     }
 
     println!("Controller paired to MAC: {}", mac);
@@ -120,6 +142,8 @@ fn main() {
     // handle subcommand
     match args.command {
         Command::Get {} => handle_get(device_id, args.no_device_info),
-        Command::Pair { mac } => handle_pair(device_id, args.no_device_info, mac),
+        Command::Pair { mac, no_verify } => {
+            handle_pair(device_id, args.no_device_info, !no_verify, mac)
+        }
     }
 }

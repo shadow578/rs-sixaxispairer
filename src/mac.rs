@@ -1,7 +1,7 @@
 use std::error::Error;
 
 /// A struct representing a MAC address.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct MACAddress([u8; 6]);
 
 impl std::fmt::Display for MACAddress {
