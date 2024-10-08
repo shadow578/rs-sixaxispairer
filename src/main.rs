@@ -21,11 +21,11 @@ struct Args {
 
     /// Manually specify the USB device ID of the controller.
     #[arg(short, long)]
-    vendor_id: Option<u16>,
+    vendor_id: Option<u16>, // TODO: allow supplying VID / PID as hex
 
     /// Manually specify the USB product ID of the controller.
     #[arg(short, long)]
-    product_id: Option<u16>,
+    product_id: Option<u16>, // TODO: allow supplying VID / PID as hex
 }
 
 #[derive(Subcommand, Debug)]
