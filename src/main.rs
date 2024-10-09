@@ -20,12 +20,12 @@ struct Args {
     no_device_info: bool,
 
     /// Manually specify the USB device ID of the controller.
-    #[arg(short, long)]
-    vendor_id: Option<u16>, // TODO: allow supplying VID / PID as hex
+    #[arg(short, long, value_parser = vid_pid_parser)]
+    vendor_id: Option<u16>,
 
     /// Manually specify the USB product ID of the controller.
-    #[arg(short, long)]
-    product_id: Option<u16>, // TODO: allow supplying VID / PID as hex
+    #[arg(short, long, value_parser = vid_pid_parser)]
+    product_id: Option<u16>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -42,6 +42,17 @@ enum Command {
         #[arg(short, long, default_value = "false")]
         no_verify: bool,
     },
+}
+
+fn vid_pid_parser(s: &str) -> Result<u16, String> {
+    // allow specifying VID / PID as decimal or hex
+    // based on https://github.com/clap-rs/clap/issues/5403#issuecomment-2009776093
+    let result = match s.get(0..2) {
+        Some("0x") => u16::from_str_radix(&s[2..], 16),
+        _ => u16::from_str_radix(&s, 10),
+    };
+
+    return result.map_err(|e| format!("{e}"));
 }
 
 fn connect_controller(
