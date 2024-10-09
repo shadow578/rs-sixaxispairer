@@ -3,12 +3,12 @@ pub mod sixaxis;
 
 use clap::{Parser, Subcommand};
 use mac::MACAddress;
-use sixaxis::{SixAxisController, USBDeviceId};
+use sixaxis::{SixAxisController, SixAxisProtocol, USBDeviceId};
 
 #[derive(Parser, Debug)]
 #[command(version)]
 #[command(
-    about = "A simple CLI tool to view and change the paired MAC address of a Sony Sixaxis controller."
+    about = "A simple CLI tool to view and change the paired bluetooth MAC address of a Sony Sixaxis or DualShock controller."
 )]
 struct Args {
     /// The subcommand to run.
@@ -19,13 +19,17 @@ struct Args {
     #[arg(short, long, default_value = "false")]
     no_device_info: bool,
 
-    /// Manually specify the USB device ID of the controller.
-    #[arg(short, long, value_parser = vid_pid_parser)]
+    /// Manually specify the USB device ID of the controller. Required when PID is specified.
+    #[arg(long = "vid", value_parser = vid_pid_parser)]
     vendor_id: Option<u16>,
 
-    /// Manually specify the USB product ID of the controller.
-    #[arg(short, long, value_parser = vid_pid_parser)]
+    /// Manually specify the USB product ID of the controller. Required when VID is specified.
+    #[arg(long = "pid", value_parser = vid_pid_parser)]
     product_id: Option<u16>,
+
+    /// The protocol to use for the controller. Required if manually specifying the device ID.
+    #[arg(long)]
+    protocol: Option<CLIProtocol>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -44,6 +48,16 @@ enum Command {
     },
 }
 
+#[derive(Debug, Copy, Clone, clap::ValueEnum)]
+#[clap(rename_all = "lower")]
+enum CLIProtocol {
+    /// SixAxis protocol, used by the PS3 controller.
+    SixAxis,
+
+    /// DualShock 4 protocol, used by the PS4 controller.
+    DualShock4,
+}
+
 fn vid_pid_parser(s: &str) -> Result<u16, String> {
     // allow specifying VID / PID as decimal or hex
     // based on https://github.com/clap-rs/clap/issues/5403#issuecomment-2009776093
@@ -57,9 +71,10 @@ fn vid_pid_parser(s: &str) -> Result<u16, String> {
 
 fn connect_controller(
     device_id: Option<USBDeviceId>,
+    protocol: Option<SixAxisProtocol>,
     print_device_info: bool,
 ) -> SixAxisController {
-    let controller = SixAxisController::open(device_id, None); // TODO: allow specifying protocol in CLI
+    let controller = SixAxisController::open(device_id, protocol);
     if controller.is_err() {
         eprintln!("Failed to open controller: {}", controller.err().unwrap());
         std::process::exit(1);
@@ -74,8 +89,12 @@ fn connect_controller(
     return controller;
 }
 
-fn handle_get(device_id: Option<USBDeviceId>, no_device_info: bool) {
-    let controller = connect_controller(device_id, !no_device_info);
+fn handle_get(
+    device_id: Option<USBDeviceId>,
+    protocol: Option<SixAxisProtocol>,
+    no_device_info: bool,
+) {
+    let controller = connect_controller(device_id, protocol, !no_device_info);
 
     // get paired mac
     let mac = controller.get_paired_mac();
@@ -89,7 +108,13 @@ fn handle_get(device_id: Option<USBDeviceId>, no_device_info: bool) {
     std::process::exit(0);
 }
 
-fn handle_pair(device_id: Option<USBDeviceId>, no_device_info: bool, verify: bool, mac: String) {
+fn handle_pair(
+    device_id: Option<USBDeviceId>,
+    protocol: Option<SixAxisProtocol>,
+    no_device_info: bool,
+    verify: bool,
+    mac: String,
+) {
     // parse mac address
     // do this before connecting to controller to fail early
     let mac = MACAddress::from_string(&mac);
@@ -100,7 +125,7 @@ fn handle_pair(device_id: Option<USBDeviceId>, no_device_info: bool, verify: boo
     let mac = mac.unwrap();
 
     // connect to controller
-    let controller = connect_controller(device_id, !no_device_info);
+    let controller = connect_controller(device_id, protocol, !no_device_info);
 
     // pair controller
     let result = controller.set_paired_mac(&mac);
@@ -150,11 +175,28 @@ fn main() {
         None
     };
 
+    // if device id is manually specified, protocol must also be specified
+    if device_id.is_some() && args.protocol.is_none() {
+        eprintln!("Protocol must be specified when manually specifying device ID.");
+        std::process::exit(1);
+    }
+
+    // if device id is not manually specified, protocol is ignored
+    if device_id.is_none() && args.protocol.is_some() {
+        eprintln!("Protocol parameter is ignored when auto-detecting device.");
+    }
+
+    // map CLI protocol to library protocol enum
+    let protocol = args.protocol.map(|p| match p {
+        CLIProtocol::SixAxis => SixAxisProtocol::SixAxis,
+        CLIProtocol::DualShock4 => SixAxisProtocol::DualShock4,
+    });
+
     // handle subcommand
     match args.command {
-        Command::Get {} => handle_get(device_id, args.no_device_info),
+        Command::Get {} => handle_get(device_id, protocol, args.no_device_info),
         Command::Pair { mac, no_verify } => {
-            handle_pair(device_id, args.no_device_info, !no_verify, mac)
+            handle_pair(device_id, protocol, args.no_device_info, !no_verify, mac)
         }
     }
 }
